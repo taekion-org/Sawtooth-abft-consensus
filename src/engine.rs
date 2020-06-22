@@ -74,7 +74,6 @@ pub struct ABFTService {
     local_peer_id: PeerId,
     state: ServiceState,
     block_cycle_timeout: Timeout, // Time from a finalized commit -> finalized commit, max
-    votes:HashMap<Vec<u8>, u32>,
     vote_broadcast: Option<Broadcast<PeerId>>,
     validators: Vec<PeerId>,
     pending_msgs: Vec<LoggedPacket>,
@@ -88,14 +87,21 @@ impl ABFTService {
             service,
             local_peer_id,
             state: ServiceState::Startup,
-            block_cycle_timeout: Timeout::new(time::Duration::from_secs(30)),
-            votes: HashMap::new(),
+            block_cycle_timeout: Timeout::new(time::Duration::from_secs(10)),
             vote_broadcast: None,
             validators: vec![],
             pending_msgs: vec![],
             selected_offer: vec![],
             current_seq_num: 0,
         }
+    }
+
+    fn add_pending_msg(&mut self, peer:PeerId, packet: ABFTPacket) {
+        let find_res = self.pending_msgs.iter().position(|lp| lp.packet.seq_num == packet.seq_num && lp.packet.msg_type == packet.msg_type && lp.peer == peer);
+        if  find_res.is_some() {
+            self.pending_msgs.remove(find_res.unwrap());
+        }
+        self.pending_msgs.push(LoggedPacket{peer, packet});
     }
 
     fn load_settings(&mut self, block_id:BlockId) {
@@ -134,7 +140,7 @@ impl ABFTService {
         };
 
         let payload = bincode::serialize(&packet).map_err(|_e| Error::EncodingError(String::from("broadcast payload")))?;
-        self.pending_msgs.push(LoggedPacket{peer:self.local_peer_id.clone(), packet});
+        self.add_pending_msg(self.local_peer_id.clone(), packet);
         return self.service.broadcast(msg_type, payload);
     }
 
@@ -147,7 +153,7 @@ impl ABFTService {
         };
 
         let payload = bincode::serialize(&packet).map_err(|_e| Error::EncodingError(String::from("send_to payload")))?;
-        self.pending_msgs.push(LoggedPacket{peer:self.local_peer_id.clone(), packet});
+        self.add_pending_msg(self.local_peer_id.clone(), packet);
         return self.service.send_to(peer, msg_type, payload);
     }
 
@@ -432,10 +438,10 @@ impl ABFTService {
         self.state = ServiceState::Initializing;
         self.selected_offer.clear();
         //self.cleanup_offered_blocks(None);
-        self.votes.clear();
         self.block_cycle_timeout.stop();
         self.vote_broadcast = None;
-        self.pending_msgs.clear();
+        let cur_seq = self.current_seq_num;
+        self.pending_msgs.retain(|lp| lp.packet.seq_num >= cur_seq);
     }
 
     fn check_timers(&mut self) {
@@ -461,9 +467,10 @@ impl ABFTService {
         self.state = ServiceState::Finishing;
 
         self.cancel_block();
-        self.votes.clear();
 
-        self.initialize_block();
+        self.reset();
+
+        self.state = ServiceState::Initializing;
     }
 
     fn handle_block_new(&mut self, block: Block) {
@@ -504,7 +511,7 @@ impl ABFTService {
     fn handle_peer_message(&mut self, message: PeerMessage, peer_id: PeerId) -> Result<(), Error> {
         info!("Got a peer message for type {}", message.header.message_type);
         let packet: ABFTPacket = bincode::deserialize(&message.content).map_err(|_e| Error::EncodingError(String::from("deserialize packet")))?;
-        self.pending_msgs.push(LoggedPacket{peer:peer_id, packet:packet.clone()});
+        self.add_pending_msg(peer_id, packet.clone());
 
         match ABFTMessage::from_str(message.header.message_type.as_ref())
             .unwrap()
