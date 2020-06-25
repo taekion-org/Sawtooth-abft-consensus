@@ -53,7 +53,9 @@ fn main() {
         (@arg connect: -C --connect +takes_value
          "connection endpoint for validator")
         (@arg verbose: -v --verbose +multiple
-         "increase output verbosity"))
+         "increase output verbosity")
+        (@arg config: -c --config +takes_value +required
+         "config file location"))
     .get_matches();
 
     let endpoint = matches
@@ -89,7 +91,7 @@ fn main() {
 
     let (driver, _stop) = ZmqDriver::new();
     driver
-        .start(endpoint, ABFTEngine::new())
+        .start(endpoint, ABFTEngine::new(matches.value_of("config").unwrap()))
         .unwrap_or_else(|err| {
             error!("{}", err);
             process::exit(1);
