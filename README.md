@@ -27,5 +27,8 @@ The configuration is put in a JSON file and contains the secret key share and pu
 
 Three arguments are available:
 * __-v__: Verbose output, can be present up to 3 times for more verbosity
-* __-C__: The validator endpoint to connect to
+* __-C || --connect__: The validator endpoint to connect to
 * __-c__: The path to the json config file described above
+
+Example run line:
+`abft-consensus -vv --connect tcp://validator:5050 -c /etc/sawtooth/abft.json`
