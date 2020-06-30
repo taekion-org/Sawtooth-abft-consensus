@@ -660,7 +660,7 @@ impl ABFTService {
                 if self.key_info.pkset.public_key().verify(&sig, block.summary) {
                     debug!("The signature is valid!");
                 } else {
-                    error!("The signature does not validate?!");
+                    panic!("The signature does not validate?!");
                 }
             }
         }
