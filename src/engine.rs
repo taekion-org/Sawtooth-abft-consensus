@@ -187,14 +187,17 @@ impl ABFTService {
 
     fn initialize_block(&mut self) {
         debug!("Initializing block");
-        self.block_cycle_timeout.start();
         self.state = ServiceState::Initializing;
         match self.service.cancel_block() {
             Ok(_) => {},
             Err(e) => error!("Error canceling block {}", e),
         }
         match self.service.initialize_block(None) {
-            Ok(_) => self.state = ServiceState::SelectingBlock,
+            Ok(_) => {
+                // TODO:  Check our assumption that everyone will start around the same time
+                self.block_cycle_timeout.start();
+                self.state = ServiceState::SelectingBlock
+            },
             Err(e) => error!("Error from intialize {}", e),
         }
     }
@@ -603,7 +606,7 @@ impl ABFTService {
         self.vote_broadcast = None;
         self.tsign = None;
         self.subset = None;
-        let cur_seq = self.current_seq_num + 1;
+        let cur_seq = self.current_seq_num;
         self.pending_msgs.retain(|lp| lp.packet.seq_num >= cur_seq);
         self.offers.clear();
     }
@@ -611,8 +614,8 @@ impl ABFTService {
     fn check_timers(&mut self) {
         if self.block_cycle_timeout.check_expired() {
             warn!("Timer cycled in state {:?}", self.state);
-            let cur_seq = self.current_seq_num + 1;
-            self.pending_msgs.retain(|lp| lp.packet.seq_num > cur_seq);
+            let save_seq = self.current_seq_num + 1;
+            self.pending_msgs.retain(|lp| lp.packet.seq_num > save_seq);
             self.reset();
             return;
         }
@@ -631,7 +634,7 @@ impl ABFTService {
         );
         let block = self.get_block(&new_chain_head);
         
-        self.current_seq_num += block.block_num;
+        self.current_seq_num = block.block_num;
         self.state = ServiceState::Finishing;
 
         self.cancel_block();
@@ -669,8 +672,7 @@ impl ABFTService {
 
         // TODO: Dump the bad block with ignore or fail?
         if self.selected_offer.len() == 0 {
-            error!("We are attempted to work on a block with no voted selection.");
-            return;
+            warn!("We are attempted to work on a block with no voted selection. Accepting it because the signature is valid.");
         }
         
         /* TODO:  Fix this validation
@@ -690,8 +692,8 @@ impl ABFTService {
     }
 
     fn handle_peer_message(&mut self, message: PeerMessage, peer_id: PeerId) -> Result<(), Error> {
-        info!("Got a peer message for type {}", message.header.message_type);
         let packet: ABFTPacket = bincode::deserialize(&message.content).map_err(|_e| Error::EncodingError(String::from("deserialize packet")))?;
+        info!("Got a peer message for seq {} type {}", packet.seq_num, message.header.message_type);
         self.add_pending_msg(peer_id, packet.clone());
 
         match ABFTMessage::from_str(message.header.message_type.as_ref())
