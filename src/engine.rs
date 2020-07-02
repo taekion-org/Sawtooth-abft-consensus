@@ -289,6 +289,7 @@ impl ABFTService {
             return Err(Error::InvalidState(String::from("We didn't start our subset process yet")));
         }
 
+        // Get our data out, and process via the subset methods.  Convert all errors to our type.
         let hbmsg: hbbft::subset::Message<PeerId> = bincode::deserialize(&packet.bytes).map_err(|e| Error::EncodingError(e.to_string()))?;
         let steps = self.subset.as_mut().expect("subset handler").handle_message(from_id, hbmsg).map_err(|e| Error::EncodingError(e.to_string()))?;
         self.send_subset_messages(&steps)?;
@@ -307,11 +308,13 @@ impl ABFTService {
                     self.offers.push((peer, offer));
                 },
                 Done => {
+                    // This is our "vote" logic.  This could be expanded in many different directions
+                    // to support specific use cases, and more clear fairness metrics.
                     debug!("Done with all data: {:?}", self.offers);
                     self.offers.sort_by_key(|o| hex::encode(&o.1));
-                    info!("Offers:");
+                    debug!("Offers:");
                     for offer in &self.offers {
-                        info!("\t{:}: {:}", hex::encode(&offer.0), hex::encode(&offer.1));
+                        debug!("\t{:}: {:}", hex::encode(&offer.0), hex::encode(&offer.1));
                     }
                     self.state = ServiceState::VoteReady;
 
@@ -420,7 +423,6 @@ impl ABFTService {
             error!("Got a new block when we weren't expecting it! BlockId: {}", hex::encode(&block.block_id));
         }
 
-        // TODO:  Actually check the consensus data
         info!("BlockNew, checking consensus data: {}", DisplayBlock(&block));
         let res = bincode::deserialize::<hbbft::crypto::Signature>(&block.payload);
         match res {
