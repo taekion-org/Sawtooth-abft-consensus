@@ -23,6 +23,16 @@ The configuration is put in a JSON file and contains the secret key share and pu
 }
 ```
 
+The `genshares` tool can help you generate your config, pass it all of the public key identities of your validators as args:
+```
+> genshares \
+02dfb9b074448ab903cc84ec543f80250fd0b1a43b162f2ce0e92485417ec3e14e \
+02ecafa9876c04380a385f61c085ec9f6157ff50d49624c9b45e1819a14ac0e424 \
+03c0fea0ed3d65cfd89df54a8158ae7a7d746f1c51aaab4e2b5dcb1e913e8fd7ee \
+0280f795a25d24e522704f13742cd27b40bf551f10052bb62100e81b91f20c6427 \
+0271b324b68efb2a389dc4193c03138ef5d62971dce9dd5046de3b205ceeaf3812
+```
+
 ## Running
 
 Three arguments are available:
