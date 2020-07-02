@@ -1,24 +1,24 @@
-use std::fmt::{self, Write};
+use std::fmt::{self};
 use std::sync::Arc;
 use std::str::FromStr;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap};
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use hex;
 use std::fs::File;
 use std::io::prelude::*;
 
-use bincode::{deserialize, serialize};
+use bincode;
 
 use sawtooth_sdk::consensus::{engine::*, service::Service};
 
 use hbbft::broadcast::Broadcast;
 use hbbft::subset::{Subset};
-use hbbft::{ValidatorSet, NetworkInfo, Contribution};
+use hbbft::{NetworkInfo};
 use hbbft::threshold_sign::ThresholdSign;
-use hbbft::crypto::{SecretKey, SecretKeyShare, PublicKeySet};
+use hbbft::crypto::{SecretKeyShare, PublicKeySet};
 
 use crate::timing::Timeout;
 
@@ -32,19 +32,6 @@ pub struct KeyInfo {
 struct OfferPacket {
     offer_id: Vec<u8>,
     summary: Vec<u8>,
-}
-
-#[derive(Default, Debug, Serialize, Deserialize)]
-struct OfferedBlock {
-    peer: PeerId,
-    offer_id: Vec<u8>,
-    summary: Vec<u8>,
-}
-
-impl fmt::Display for OfferedBlock {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Offered(Peer[{}] OfferId[{}])", hex::encode(&self.peer), hex::encode(&self.offer_id))
-    }
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -71,11 +58,7 @@ enum ServiceState {
     Startup,
     Initializing,
     SelectingBlock,
-    FoundBlock,
-    OfferedBlock,
     VoteReady,
-    CheckingBlock,
-    Voted,
     SeekingAgreement,
     Signing,
     AwaitingCommit,
@@ -142,13 +125,6 @@ impl ABFTService {
         self.netinfo = Some(NetworkInfo::new(self.local_peer_id.clone(), self.key_info.sec_key_share.clone(), self.key_info.pkset.clone(), &self.validators));
     }
 
-    fn get_chain_head(&mut self) -> Block {
-        debug!("Getting chain head");
-        self.service
-            .get_chain_head()
-            .expect("Failed to get chain head")
-    }
-
     #[allow(clippy::ptr_arg)]
     fn get_block(&mut self, block_id: &BlockId) -> Block {
         debug!("Getting block {}", hex::encode(&block_id));
@@ -157,19 +133,6 @@ impl ABFTService {
             .expect("Failed to get block")
             .remove(block_id)
             .unwrap()
-    }
-
-    // Wraps in a consistent information packet
-    fn broadcast(&mut self, msg_type: &str, bytes: Vec<u8>) -> Result<(), Error> {
-        let packet = ABFTPacket{
-            seq_num:self.current_seq_num+1,
-            msg_type:String::from(msg_type),
-            bytes
-        };
-
-        let payload = bincode::serialize(&packet).map_err(|_e| Error::EncodingError(String::from("broadcast payload")))?;
-        self.add_pending_msg(self.local_peer_id.clone(), packet);
-        return self.service.broadcast(msg_type, payload);
     }
 
     // Wraps in a consistent information packet
@@ -271,167 +234,6 @@ impl ABFTService {
         };
     }
 
-    /*
-    fn handle_offer_packet(&mut self) -> Result<(), Error> {
-        // Check to see if we have all the offers
-        let offers = self.pending_msgs.iter().filter(|m| m.packet.msg_type == "offer" && m.packet.seq_num == (self.current_seq_num + 1)).collect::<Vec<_>>();
-        if offers.len() < (self.validators.len() - 2)  {
-            return Ok(());
-        }
-
-        let mut sorted_offers = offers.iter().filter_map(|p| {
-            bincode::deserialize::<OfferPacket>(&p.packet.bytes).ok()
-        }).collect::<Vec<_>>();
-        sorted_offers.sort_by_key(|o| hex::encode(&o.offer_id));
-
-        info!("Offers:");
-        for offer in &sorted_offers {
-            info!("\t{:?}", offer);
-        }
-        self.state = ServiceState::VoteReady;
-
-        let selected_offer = sorted_offers.first().ok_or(Error::InvalidState(String::from("No valid offer found")))?;
-        self.broadcast("vote", selected_offer.offer_id.clone());
-        self.selected_offer.offer_id = selected_offer.offer_id.clone();
-        self.selected_offer.summary = selected_offer.summary.clone();
-
-        self.state = ServiceState::Voted;
-
-        Ok(())
-    }
-    */
-
-    /*
-    fn start_vote(&mut self) {
-        let selected_offer_id = self.offered_blocks.keys().next();
-        if selected_offer_id.is_none() {
-            return;
-        }
-
-        let offer_id = selected_offer_id.unwrap();
-        if self.broadcast("vote", offer_id.clone()).is_err() {
-            error!("Error broadcasting vote");
-        }
-        debug!("Self voting for {}", hex::encode(offer_id));
-        self.add_vote(offer_id.clone());
-        self.state = ServiceState::Voted;
-    }
-
-    fn cleanup_offered_blocks(&mut self, selected_block_id: Option<BlockId>) {
-        let blocks: Vec<BlockId> = self.offered_blocks.keys().cloned().collect();
-        for block_id in blocks {
-            debug!("attempting cleanup of {}", hex::encode(&block_id));
-            if selected_block_id.is_none() || &block_id != selected_block_id.as_ref().unwrap() {
-                trace!("Ignoring block {}", hex::encode(&block_id));
-                /*
-                match self.service.fail_block(block_id) {
-                    Err(e) => debug!("Error ignoring {}", e),
-                    Ok(_) => {},
-                }
-                */
-            }
-        }
-        self.offered_blocks.clear();
-    }
-    */
-
-    /*
-    fn handle_vote_packet(&mut self) -> Result<(), Error> {
-        let vote_packets = self.pending_msgs.iter().filter(|m| m.packet.msg_type == "vote" && m.packet.seq_num == (self.current_seq_num + 1)).collect::<Vec<_>>();
-
-        if vote_packets.len() != (self.validators.len() - 2) {
-            return Ok(());
-        }
-
-        let mut votes = HashMap::new();
-
-        for vp in &vote_packets {
-            let vote = votes.entry(vp.packet.bytes.clone()).or_insert(0);
-            *vote += 1;
-        }
-
-        info!("Votes:");
-        for (offer_id, count) in &votes {
-            info!("\t{}: {}", hex::encode(&offer_id), count);
-        }
-
-        let voted_entry = votes.iter().max_by(|a, b| a.1.cmp(&b.1));
-        if voted_entry.is_none() {
-            error!("We got a bad vote entry?");
-            return Err(Error::InvalidState(String::from("empty vote entry")));
-        }
-        let offer_hash = voted_entry.unwrap().0;
-
-        let offer_res = self.pending_msgs.iter().find(|lp| {
-            if lp.packet.msg_type == "offer" && lp.packet.seq_num == (self.current_seq_num + 1) {
-                let offer:OfferPacket = bincode::deserialize(&lp.packet.bytes).expect("deserialize");
-                return offer.offer_id == *offer_hash;
-            }
-            return false;
-        });
-        if offer_res.is_none() {
-            error!("We didn't have an offer entry for the voted block!");
-            return Err(Error::InvalidState(String::from("no offer information for the given vote")));
-        }
-
-        if let Some(offer) = offer_res {
-            let validators = Arc::new(ValidatorSet::from(self.validators.iter()));
-            for (i, idx) in validators.all_indices() {
-                debug!("Validator {}:{}", idx, hex::encode(i));
-            }
-            debug!("Creating Broadcast from {} for leader {}", hex::encode(&self.local_peer_id), hex::encode(&offer.peer));
-            let broadcast = Broadcast::new(self.local_peer_id.clone(), validators.clone(), offer.peer.clone());
-            if let Err(e) = broadcast {
-                error!("Could not create a broadcast: {}", e);
-                return Err(Error::InvalidState(String::from("Broadcast create failure")));
-            }
-            self.vote_broadcast = Some(broadcast.unwrap());
-            if offer.peer == self.local_peer_id {
-                let broadcaster = self.vote_broadcast.as_mut().expect("initial broadcast");
-                let offer_packet: OfferPacket = bincode::deserialize(&offer.packet.bytes).expect("Deserialize for broadcast");
-                debug!("Broadcasting start for offer: {}", hex::encode(&offer_packet.offer_id));
-                match broadcaster.broadcast(offer_packet.offer_id) {
-                    Ok(initial_step) => {
-                        self.send_broadcast_messages(&initial_step);
-                    }
-                    Err(e) => {
-                        error!("Error creating initial step {}", e);
-                    }
-                }
-            } else {
-                let early_msgs = self.pending_msgs.iter()
-                    .filter(|lp| lp.peer != self.local_peer_id && lp.packet.seq_num == (self.current_seq_num + 1) && lp.packet.msg_type == "broadcast").cloned().collect::<Vec<_>>();
-                debug!("Handling {} early messages for broadcast", early_msgs.len());
-                for em in early_msgs {
-                    self.handle_broadcast_message(&em.peer, &em.packet)?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-    */
-
-    /*
-    fn handle_broadcast_message(&mut self, from_id: &PeerId, packet:&ABFTPacket) -> Result<(), Error> {
-        if self.vote_broadcast.is_none() {
-            error!("Received a broadcast but we aren't ready");
-            return Ok(());
-        }
-
-        let hbmsg: hbbft::broadcast::Message = bincode::deserialize(&packet.bytes).expect("deser error");
-        let steps = self.vote_broadcast.as_mut().expect("handle_message").handle_message(from_id, hbmsg).expect("handle steps");
-        self.send_broadcast_messages(&steps)?;
-        if steps.output.is_empty() {
-            return Ok(());
-        }
-
-        let res = self.sign_and_send(&self.selected_offer.summary);
-        debug!("We have output from the broadcast! {} {} {}", hex::encode(steps.output.first().unwrap()), hex::encode(&self.selected_offer.offer_id), hex::encode(&self.our_offer));
-        return res;
-    }
-    */
-
     fn sign_and_send(&mut self, data:&Vec<u8>) -> Result<(), Error> {
 
         let ni_arc = Arc::new(self.netinfo.clone().unwrap());
@@ -527,30 +329,6 @@ impl ABFTService {
         Ok(())
     }
 
-    /*
-    fn send_broadcast_messages(&mut self, step: &hbbft::broadcast::Step<PeerId>) -> Result<(), Error> {
-        for msg in step.messages.iter() {
-            debug!("Doing message: {:?}", msg);
-
-            let bytes = bincode::serialize(&msg.message).map_err(|e| {
-                error!("Error serializing step: {}", e);
-                return;
-            }).unwrap();
-
-            // TODO:  This cloen is nonsense and needs a rework of the way we store validators to it's own struct
-            for peerid in &self.validators.clone() {
-                if msg.target.contains(peerid) {
-                    let res = self.send_to(peerid, "broadcast", bytes.clone());
-                    if let Err(e) = res {
-                        error!("Failed to send broadcast step to {:?}: {}", hex::encode(&peerid), e);
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    */
-
     fn send_subset_messages(&mut self, step: &hbbft::subset::Step<PeerId>) -> Result<(), Error> {
         for msg in step.messages.iter() {
             debug!("Doing subset message: {:?}", msg);
@@ -560,7 +338,7 @@ impl ABFTService {
                 return;
             }).unwrap();
 
-            // TODO:  This cloen is nonsense and needs a rework of the way we store validators to it's own struct
+            // TODO:  This clone is nonsense and needs a rework of the way we store validators to it's own struct
             for peerid in &self.validators.clone() {
                 if msg.target.contains(peerid) {
                     let res = self.send_to(peerid, "subset", bytes.clone());
@@ -601,7 +379,6 @@ impl ABFTService {
         self.offer_summary.clear();
         self.selected_offer.clear();
         self.our_offer.clear();
-        //self.cleanup_offered_blocks(None);
         self.block_cycle_timeout.stop();
         self.vote_broadcast = None;
         self.tsign = None;
@@ -619,12 +396,6 @@ impl ABFTService {
             self.reset();
             return;
         }
-
-        /*
-        if service.block_vote_timeout.check_expired() {
-            service.state = ServiceState::VoteReady;
-        }
-        */
     }
 
     fn handle_commit(&mut self, new_chain_head: BlockId) {              
@@ -670,23 +441,9 @@ impl ABFTService {
             return;
         }
 
-        // TODO: Dump the bad block with ignore or fail?
         if self.selected_offer.len() == 0 {
             warn!("We are attempted to work on a block with no voted selection. Accepting it because the signature is valid.");
         }
-        
-        /* TODO:  Fix this validation
-        let selected_offer = &self.offered_blocks[&self.selected_offer];
-        if block.summary != selected_offer.summary {
-            error!("The offer doesn't match the expected summary");
-            return;
-        }
-
-        if block.signer_id != selected_offer.peer {
-            error!("The block was not initiated by the selected peer");
-            return;
-        }
-        */
         
         self.check_block(block.block_id);
     }
@@ -699,24 +456,12 @@ impl ABFTService {
         match ABFTMessage::from_str(message.header.message_type.as_ref())
             .unwrap()
         {
-            ABFTMessage::Offer => {
-                //self.handle_offer_packet();
-            }
-
-            ABFTMessage::Vote => {
-                //self.handle_vote_packet();
-            }
-
-            ABFTMessage::Broadcast => {
-                //self.handle_broadcast_message(&message.header.signer_id, &packet);
-            }
-
             ABFTMessage::TSign => {
-                self.handle_tsign_message(&message.header.signer_id, &packet);
+                self.handle_tsign_message(&message.header.signer_id, &packet)?;
             }
 
             ABFTMessage::Subset => {
-                self.handle_subset_message(&message.header.signer_id, &packet);
+                self.handle_subset_message(&message.header.signer_id, &packet)?;
             }
         }
 
@@ -791,7 +536,10 @@ impl Engine for ABFTEngine {
                         Update::BlockValid(block_id) => service.handle_block_valid(block_id),
                         Update::BlockCommit(new_chain_head) => service.handle_commit(new_chain_head),
                         Update::PeerMessage(message, sender_id) => {
-                            service.handle_peer_message(message, sender_id);
+                            let res = service.handle_peer_message(message, sender_id);
+                            if res.is_err() {
+                                warn!("Issue handling a peer message: {}", res.err().unwrap());
+                            }
                         }
                         _ => {}
                     }
@@ -868,9 +616,6 @@ fn message_type(update: &Update) -> &str {
 }
 
 pub enum ABFTMessage {
-    Offer,
-    Vote,
-    Broadcast,
     TSign,
     Subset,
 }
@@ -880,9 +625,6 @@ impl FromStr for ABFTMessage {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "offer" => Ok(ABFTMessage::Offer),
-            "vote" => Ok(ABFTMessage::Vote),
-            "broadcast" => Ok(ABFTMessage::Broadcast),
             "tsign" => Ok(ABFTMessage::TSign),
             "subset" => Ok(ABFTMessage::Subset),
             _ => Err("Invalid message type"),

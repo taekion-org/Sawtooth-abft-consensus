@@ -1,6 +1,5 @@
 extern crate hbbft;
 extern crate rand;
-#[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 extern crate crypto;
@@ -8,9 +7,9 @@ extern crate hex;
 
 use std::env;
 use std::collections::BTreeMap;
-use hbbft::crypto::{SecretKey, PublicKey, PublicKeySet, SecretKeyShare};
+use hbbft::crypto::{SecretKey, PublicKey};
 use hbbft::crypto::serde_impl::SerdeSecret;
-use hbbft::{to_pub_keys, NetworkInfo, PubKeyMap};
+use hbbft::{NetworkInfo};
 use rand::{rngs::OsRng, Rng};
 
 type PeerId = Vec<u8>;
