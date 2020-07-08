@@ -1,4 +1,21 @@
-An attempt to be more asynchronous and do bft in consensus for the Hyperledger Sawtooth Blockchain
+This repo contains the Sawtooth Asynchronous BFT Consensus based on the HoneyBadger Consensus
+---------------------------------------------------------------------------------------------
+Developed by Taekion
+
+What is it for?
+---------------
+
+This is a consensus mechanism that 
+
+What does it do?
+----------------
+
+USe this consensus when 
+
+Getting Started
+---------------
+
+A application-specific client library needs to implement the following interface:An attempt to be more asynchronous and do bft in consensus for the Hyperledger Sawtooth Blockchain
 
 ## Configuration
 
