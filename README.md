@@ -1,4 +1,4 @@
-An attempt to be more asynchronous and do bft in consensus
+An attempt to be more asynchronous and do bft in consensus for the Hyperledger Sawtooth Blockchain
 
 ## Configuration
 
