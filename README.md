@@ -1,6 +1,6 @@
-This repo contains the Sawtooth Asynchronous BFT Consensus based on the HoneyBadger Consensus
+This repo contains an Asynchronous BFT Consensus based on the HoneyBadger Consensus
 ---------------------------------------------------------------------------------------------
-Developed by Taekion
+Developed by Taekion for Hyperledger Sawtooth
 
 What is it for?
 ---------------
@@ -10,7 +10,7 @@ This is a consensus mechanism that
 What does it do?
 ----------------
 
-USe this consensus when 
+Uue this consensus when 
 
 Getting Started
 ---------------
