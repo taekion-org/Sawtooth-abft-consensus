@@ -1,25 +1,29 @@
-This repo contains an Asynchronous BFT Consensus based on the HoneyBadger Consensus
+Asynchronous Byzantine Fault Tolerant (aBFT) Sawtooth Consensus Service
 ---------------------------------------------------------------------------------------------
-Developed by Taekion for Hyperledger Sawtooth
+Developed by Taekion for [Hyperledger Sawtooth](https://www.hyperledger.org/use/sawtooth) v1.2
 
-What is it for?
----------------
+What is this?
+-------------
 
-This is a consensus mechanism that 
+This repo contains an aBFT consensus service that utilizes the HoneyBadger [hbbft algorithms](https://github.com/poanetwork/hbbft) library in Rust by the [POA Network](https://www.poa.network/). 
 
 What does it do?
 ----------------
 
-Uue this consensus when 
+It implements the [Sawtooth Consensus](https://sawtooth.hyperledger.org/faq/consensus/) interface and provides bindings into the set of HoneyBadger algorithms available in the POA Network's Rust library.
 
 Getting Started
 ---------------
 
-A application-specific client library needs to implement the following interface:An attempt to be more asynchronous and do bft in consensus for the Hyperledger Sawtooth Blockchain
+The codebase is intended to be a fully functional working implementation that can be adapted and customized for production scenarios depending on the asynchronous requirements and optimial HoneyBadger algorithms.  It fully supports the threshold encryption pattern for guaranteed correctly sealed blocks.
+
+This does not perform leader election, instead each validator acts as if they were the leader and proposes the next block.  HoneyBadger then performs consensus on which proposed block is the agreed upon one and once reached, a threshold signature is created.
+
+This pattern allows for custom logic to be added to the consensus service to additionally ensure the correctness of a block and the contained batches and transactions before voting.  While no such logic is currently implemenated, different applications may utilize this capability to additionally restrict potentially compromised validators or other bad actors. 
 
 ## Configuration
 
-The configuration is put in a JSON file and contains the secret key share and public key set information.
+The configuration is put in a JSON file and contains the threshold secret key share and public key set information.
 
 ```
 {

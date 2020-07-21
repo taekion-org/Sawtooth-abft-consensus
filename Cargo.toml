@@ -2,7 +2,7 @@
 name = "abft-consensus"
 version = "0.0.1"
 authors = ["Taekion"]
-description = "An asynchronous BFT consensus engine"
+description = "An asynchronous BFT consensus service for Hyperledger Sawtooth"
 
 [[bin]]
 name = "abft-consensus"
