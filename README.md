@@ -1,6 +1,6 @@
 Asynchronous Byzantine Fault Tolerant (aBFT) Sawtooth Consensus Service
 ---------------------------------------------------------------------------------------------
-Developed by Taekion for [Hyperledger Sawtooth](https://www.hyperledger.org/use/sawtooth) v1.2
+Developed by Taekion specifically for [Hyperledger Sawtooth](https://www.hyperledger.org/use/sawtooth) v1.2
 
 What is this?
 -------------
